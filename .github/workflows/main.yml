@@ -81,6 +81,11 @@ jobs:
     - name: Build UWP
       working-directory: ${{ env.GITHUB_WORKSPACE }}
       run: msbuild /m /p:TrackFileAccess=false /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=x64 /p:AppxPackageSigningEnabled=false UWP/PPSSPP_UWP.sln
+    - name: Upload UWP build
+      uses: actions/upload-artifact@v3
+      with:
+       name: UWP build
+       path: ppsspp/
 
   test-windows:
     runs-on: windows-latest
