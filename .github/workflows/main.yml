@@ -48,7 +48,16 @@ jobs:
 
     - name: Build UWP
       working-directory: ${{ env.GITHUB_WORKSPACE }}
-      run: msbuild /m /p:TrackFileAccess=false /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=x64 /p:AppxPackageSigningEnabled=false UWP/PPSSPP_UWP.sln
+      run: |
+        msbuild /m /p:TrackFileAccess=false /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=x64 /p:AppxPackageSigningEnabled=false UWP/PPSSPP_UWP.sln
+        
+        # Package the app into an AppX or MSIX executable.
+        if ($ENV:APPX_PACKAGE_FORMAT == "AppX") {
+          makeappx.exe -p UWP/PPSSPP_UWP.appxmanifest -f Appx -r
+        } else {
+          makeappx.exe -p UWP/PPSSPP_UWP.appxmanifest -f MSIX -r
+        }
+
     - name: Upload UWP build
       uses: actions/upload-artifact@v3
       with:
