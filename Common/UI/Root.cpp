@@ -175,8 +175,8 @@ static int frameCount;
 // completely broken input where the original keypresses have deviceId = 10 and the repeats
 // have deviceId = 0.
 struct HeldKey {
-	int key;
-	int deviceId;
+	InputKeyCode key;
+	InputDeviceID deviceId;
 	double triggerTime;
 
 	// Ignores startTime
@@ -204,8 +204,8 @@ bool IsScrollKey(const KeyInput &input) {
 	}
 }
 
-bool KeyEvent(const KeyInput &key, ViewGroup *root) {
-	bool retval = false;
+KeyEventResult UnsyncKeyEvent(const KeyInput &key, ViewGroup *root) {
+	KeyEventResult retval = KeyEventResult::PASS_THROUGH;
 	// Ignore repeats for focus moves.
 	if ((key.flags & (KEY_DOWN | KEY_IS_REPEAT)) == KEY_DOWN) {
 		if (IsDPadKey(key) || IsScrollKey(key)) {
@@ -218,13 +218,13 @@ bool KeyEvent(const KeyInput &key, ViewGroup *root) {
 			// Check if the key is already held. If it is, ignore it. This is to avoid
 			// multiple key repeat mechanisms colliding.
 			if (heldKeys.find(hk) != heldKeys.end()) {
-				return false;
+				return KeyEventResult::IGNORE_KEY;
 			}
 
 			heldKeys.insert(hk);
 			std::lock_guard<std::mutex> lock(focusLock);
 			focusMoves.push_back(key.keyCode);
-			retval = true;
+			retval = KeyEventResult::ACCEPT;
 		}
 	}
 	if (key.flags & KEY_UP) {
@@ -236,23 +236,26 @@ bool KeyEvent(const KeyInput &key, ViewGroup *root) {
 			hk.triggerTime = 0.0; // irrelevant
 			if (heldKeys.find(hk) != heldKeys.end()) {
 				heldKeys.erase(hk);
-				retval = true;
+				retval = KeyEventResult::ACCEPT;
 			}
 		}
 	}
-
-	retval = root->Key(key);
 
 	// Ignore volume keys and stuff here. Not elegant but need to propagate bools through the view hierarchy as well...
 	switch (key.keyCode) {
 	case NKCODE_VOLUME_DOWN:
 	case NKCODE_VOLUME_UP:
 	case NKCODE_VOLUME_MUTE:
-		retval = false;
+		retval = KeyEventResult::PASS_THROUGH;
+		break;
+	default:
 		break;
 	}
-
 	return retval;
+}
+
+void KeyEvent(const KeyInput &key, ViewGroup *root) {
+	root->Key(key);
 }
 
 static void ProcessHeldKeys(ViewGroup *root) {
@@ -281,16 +284,15 @@ restart:
 	}
 }
 
-bool TouchEvent(const TouchInput &touch, ViewGroup *root) {
+void TouchEvent(const TouchInput &touch, ViewGroup *root) {
 	focusForced = false;
 	root->Touch(touch);
 	if ((touch.flags & TOUCH_DOWN) && !focusForced) {
 		EnableFocusMovement(false);
 	}
-	return true;
 }
 
-bool AxisEvent(const AxisInput &axis, ViewGroup *root) {
+void AxisEvent(const AxisInput &axis, ViewGroup *root) {
 	enum class DirState {
 		NONE = 0,
 		POS = 1,
@@ -318,7 +320,7 @@ bool AxisEvent(const AxisInput &axis, ViewGroup *root) {
 
 	// Cannot use the remapper since this is for the menu, so we provide our own
 	// axis->button emulation here.
-	auto GenerateKeyFromAxis = [&](DirState old, DirState cur, keycode_t neg_key, keycode_t pos_key) {
+	auto GenerateKeyFromAxis = [&](DirState old, DirState cur, InputKeyCode neg_key, InputKeyCode pos_key) {
 		if (old == cur)
 			return;
 		if (old == DirState::POS) {
@@ -374,10 +376,11 @@ bool AxisEvent(const AxisInput &axis, ViewGroup *root) {
 		}
 		break;
 	}
+	default:
+		break;
 	}
 
 	root->Axis(axis);
-	return true;
 }
 
 void UpdateViewHierarchy(ViewGroup *root) {

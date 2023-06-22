@@ -4,13 +4,13 @@
 #include <cstring>
 
 #include "Common/File/Path.h"
+#include "Common/File/AndroidContentURI.h"
 #include "Common/File/FileUtil.h"
 #include "Common/StringUtils.h"
 #include "Common/Log.h"
 #include "Common/Data/Encoding/Utf8.h"
 
 #include "android/jni/app-android.h"
-#include "android/jni/AndroidContentURI.h"
 
 #if PPSSPP_PLATFORM(UWP) && !defined(__LIBRETRO__)
 #include "UWP/UWPHelpers/StorageManager.h"
@@ -161,7 +161,7 @@ std::string Path::GetFilename() const {
 	return path_;
 }
 
-static std::string GetExtFromString(const std::string &str) {
+std::string GetExtFromString(const std::string &str) {
 	size_t pos = str.rfind(".");
 	if (pos == std::string::npos) {
 		return "";
@@ -181,7 +181,7 @@ static std::string GetExtFromString(const std::string &str) {
 std::string Path::GetFileExtension() const {
 	if (type_ == PathType::CONTENT_URI) {
 		AndroidContentURI uri(path_);
-		return GetExtFromString(uri.FilePath());
+		return uri.GetFileExtension();
 	}
 	return GetExtFromString(path_);
 }

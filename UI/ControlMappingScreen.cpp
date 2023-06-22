@@ -163,6 +163,11 @@ void SingleControlMapper::Refresh() {
 }
 
 void SingleControlMapper::MappedCallback(MultiInputMapping kdf) {
+	if (kdf.empty()) {
+		// Don't want to try to add this.
+		return;
+	}
+
 	switch (action_) {
 	case ADD:
 		KeyMap::SetInputMapping(pspKey_, kdf, false);
@@ -332,6 +337,8 @@ void KeyMappingNewKeyDialog::CreatePopupContents(UI::ViewGroup *parent) {
 }
 
 bool KeyMappingNewKeyDialog::key(const KeyInput &key) {
+	if (ignoreInput_)
+		return true;
 	if (time_now_d() < delayUntil_)
 		return true;
 	if (key.flags & KEY_DOWN) {
@@ -355,6 +362,13 @@ bool KeyMappingNewKeyDialog::key(const KeyInput &key) {
 		}
 	}
 	if (key.flags & KEY_UP) {
+		// If the key released wasn't part of the mapping, ignore it here. Some device can cause
+		// stray key-up events.
+		InputMapping upMapping(key.deviceId, key.keyCode);
+		if (!mapping_.mappings.contains(upMapping)) {
+			return true;
+		}
+
 		if (callback_)
 			callback_(mapping_);
 		TriggerFinish(DR_YES);
@@ -378,6 +392,8 @@ void KeyMappingNewMouseKeyDialog::CreatePopupContents(UI::ViewGroup *parent) {
 bool KeyMappingNewMouseKeyDialog::key(const KeyInput &key) {
 	if (mapped_)
 		return false;
+	if (ignoreInput_)
+		return true;
 	if (key.flags & KEY_DOWN) {
 		if (key.keyCode == NKCODE_ESCAPE) {
 			TriggerFinish(DR_OK);
@@ -386,7 +402,9 @@ bool KeyMappingNewMouseKeyDialog::key(const KeyInput &key) {
 		}
 
 		mapped_ = true;
+
 		MultiInputMapping kdf(InputMapping(key.deviceId, key.keyCode));
+
 		TriggerFinish(DR_YES);
 		g_Config.bMapMouse = false;
 		if (callback_)
@@ -413,6 +431,8 @@ void KeyMappingNewKeyDialog::axis(const AxisInput &axis) {
 	if (time_now_d() < delayUntil_)
 		return;
 	if (IgnoreAxisForMapping(axis.axisId))
+		return;
+	if (ignoreInput_)
 		return;
 
 	if (axis.value > AXIS_BIND_THRESHOLD) {
@@ -752,6 +772,9 @@ void RecreateActivity() {
 
 UI::EventReturn TouchTestScreen::OnImmersiveModeChange(UI::EventParams &e) {
 	System_Notify(SystemNotification::IMMERSIVE_MODE_CHANGE);
+	if (g_Config.iAndroidHwScale != 0) {
+		RecreateActivity();
+	}
 	return UI::EVENT_DONE;
 }
 

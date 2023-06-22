@@ -279,6 +279,8 @@ public:
 	int iTiltSensitivityY;
 	// The deadzone radius of the tilt. Only used in the analog mapping.
 	float fTiltAnalogDeadzoneRadius;
+	float fTiltInverseDeadzone;  // An inverse deadzone for the output, counteracting excessive deadzones applied by games. See #17483.
+	bool bTiltCircularInverseDeadzone;
 	// Type of tilt input currently selected: Defined in TiltEventProcessor.h
 	// 0 - no tilt, 1 - analog stick, 2 - D-Pad, 3 - Action Buttons (Tri, Cross, Square, Circle)
 	int iTiltInputType;
@@ -339,16 +341,9 @@ public:
 	ConfigTouchPos touchAnalogStick;
 	ConfigTouchPos touchRightAnalogStick;
 
-	ConfigTouchPos touchCustom0;
-	ConfigTouchPos touchCustom1;
-	ConfigTouchPos touchCustom2;
-	ConfigTouchPos touchCustom3;
-	ConfigTouchPos touchCustom4;
-	ConfigTouchPos touchCustom5;
-	ConfigTouchPos touchCustom6;
-	ConfigTouchPos touchCustom7;
-	ConfigTouchPos touchCustom8;
-	ConfigTouchPos touchCustom9;
+	enum { CUSTOM_BUTTON_COUNT = 20 };
+
+	ConfigTouchPos touchCustom[CUSTOM_BUTTON_COUNT];
 
 	float fLeftStickHeadScale;
 	float fRightStickHeadScale;
@@ -362,16 +357,7 @@ public:
 	bool bShowTouchTriangle;
 	bool bShowTouchSquare;
 
-	ConfigCustomButton CustomButton0;
-	ConfigCustomButton CustomButton1;
-	ConfigCustomButton CustomButton2;
-	ConfigCustomButton CustomButton3;
-	ConfigCustomButton CustomButton4;
-	ConfigCustomButton CustomButton5;
-	ConfigCustomButton CustomButton6;
-	ConfigCustomButton CustomButton7;
-	ConfigCustomButton CustomButton8;
-	ConfigCustomButton CustomButton9;
+	ConfigCustomButton CustomButton[CUSTOM_BUTTON_COUNT];
 
 	// Ignored on iOS and other platforms that lack pause.
 	bool bShowTouchPause;
@@ -397,6 +383,9 @@ public:
 	float fMouseSmoothing;
 
 	bool bSystemControls;
+
+	// Use the hardware scaler to scale up the image to save fillrate. Similar to Windows' window size, really.
+	int iAndroidHwScale;  // 0 = device resolution. 1 = 480x272 (extended to correct aspect), 2 = 960x544 etc.
 
 	// Risky JIT optimizations
 	bool bDiscardRegsOnJRRA;
@@ -448,6 +437,7 @@ public:
 	bool bEnableMotions;
 	bool bForce72Hz;
 	bool bManualForceVR;
+	bool bPassthrough;
 	bool bRescaleHUD;
 	float fCameraDistance;
 	float fCameraHeight;
@@ -484,6 +474,7 @@ public:
 	// Double edged sword: much easier debugging, but not accurate.
 	bool bSkipDeadbeefFilling;
 	bool bFuncHashMap;
+	std::string sSkipFuncHashMap;
 	bool bDebugMemInfoDetailed;
 	bool bDrawFrameGraph;
 

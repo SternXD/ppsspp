@@ -105,7 +105,7 @@ static CameraHelper *cameraHelper;
 static LocationHelper *locationHelper;
 
 @interface ViewController () {
-	std::map<uint16_t, uint16_t> iCadeToKeyMap;
+	std::map<uint16_t, InputKeyCode> iCadeToKeyMap;
 }
 
 @property (nonatomic, strong) EAGLContext* context;
@@ -149,6 +149,10 @@ static LocationHelper *locationHelper;
 #endif
 	}
 	return self;
+}
+
+- (BOOL)prefersHomeIndicatorAutoHidden {
+    return YES;
 }
 
 - (void)shareText:(NSString *)text {
@@ -201,7 +205,7 @@ extern float g_safeInsetBottom;
 	graphicsContext = new IOSGraphicsContext();
 
 	graphicsContext->GetDrawContext()->SetErrorCallback([](const char *shortDesc, const char *details, void *userdata) {
-		System_NotifyUserMessage(details, 5.0, 0xFFFFFFFF, "error_callback");
+		g_OSD.Show(OSDType::MESSAGE_ERROR, details, 0.0f, "error_callback");
 	}, nullptr);
 
 	graphicsContext->ThreadStart();
@@ -563,7 +567,7 @@ int ToTouchID(UITouch *uiTouch, bool allowAllocate) {
 	}
 }
 
-- (void)controllerButtonPressed:(BOOL)pressed keyCode:(keycode_t)keyCode
+- (void)controllerButtonPressed:(BOOL)pressed keyCode:(InputKeyCode)keyCode
 {
 	KeyInput key;
 	key.deviceId = DEVICE_ID_PAD_0;

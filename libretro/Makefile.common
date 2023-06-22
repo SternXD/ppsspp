@@ -207,6 +207,7 @@ endif
 SOURCES_C += \
 	$(EXTDIR)/cpu_features/src/filesystem.c \
 	$(EXTDIR)/cpu_features/src/impl_aarch64_linux_or_android.c \
+	$(EXTDIR)/cpu_features/src/impl_aarch64_windows.c \
 	$(EXTDIR)/cpu_features/src/impl_arm_linux_or_android.c \
 	$(EXTDIR)/cpu_features/src/impl_mips_linux_or_android.c \
 	$(EXTDIR)/cpu_features/src/impl_ppc_linux.c \
@@ -276,6 +277,7 @@ SOURCES_CXX += \
 	$(COMMONDIR)/File/VFS/DirectoryReader.cpp \
 	$(COMMONDIR)/File/VFS/ZipFileReader.cpp \
 	$(COMMONDIR)/File/AndroidStorage.cpp \
+	$(COMMONDIR)/File/AndroidContentURI.cpp \
 	$(COMMONDIR)/File/DiskFree.cpp \
 	$(COMMONDIR)/File/Path.cpp \
 	$(COMMONDIR)/File/PathBrowser.cpp \
@@ -284,6 +286,7 @@ SOURCES_CXX += \
 	$(COMMONDIR)/File/DirListing.cpp \
 	$(COMMONDIR)/GPU/thin3d.cpp \
 	$(COMMONDIR)/GPU/Shader.cpp \
+	$(COMMONDIR)/GPU/GPUBackendCommon.cpp \
 	$(COMMONDIR)/GPU/ShaderWriter.cpp \
 	$(COMMONDIR)/GPU/ShaderTranslation.cpp \
 	$(COMMONDIR)/GPU/OpenGL/thin3d_gl.cpp \
@@ -292,6 +295,7 @@ SOURCES_CXX += \
 	$(COMMONDIR)/GPU/OpenGL/GLFeatures.cpp \
 	$(COMMONDIR)/GPU/OpenGL/GLFrameData.cpp \
 	$(COMMONDIR)/GPU/OpenGL/GLRenderManager.cpp \
+	$(COMMONDIR)/GPU/OpenGL/GLMemory.cpp \
 	$(COMMONDIR)/GPU/OpenGL/GLQueueRunner.cpp \
 	$(COMMONDIR)/GPU/OpenGL/DataFormatGL.cpp \
 	$(COMMONDIR)/GPU/Vulkan/thin3d_vulkan.cpp \
@@ -336,6 +340,7 @@ SOURCES_CXX += \
 	$(COMMONDIR)/UI/Context.cpp \
 	$(COMMONDIR)/UI/UIScreen.cpp \
 	$(COMMONDIR)/UI/Tween.cpp \
+	$(COMMONDIR)/UI/IconCache.cpp \
 	$(COMMONDIR)/UI/View.cpp \
 	$(COMMONDIR)/UI/ViewGroup.cpp \
 	$(COMMONDIR)/UI/ScrollView.cpp \

@@ -55,12 +55,13 @@ public:
 	virtual void postRender() {}
 	virtual void resized() {}
 	virtual void dialogFinished(const Screen *dialog, DialogResult result) {}
-	virtual void touch(const TouchInput &touch) {}
-	virtual bool key(const KeyInput &key) { return false; }
-	virtual void axis(const AxisInput &touch) {}
 	virtual void sendMessage(const char *msg, const char *value) {}
 	virtual void deviceLost() {}
 	virtual void deviceRestored() {}
+
+	virtual void UnsyncTouch(const TouchInput &touch) {}
+	virtual bool UnsyncKey(const KeyInput &touch) { return false; }
+	virtual void UnsyncAxis(const AxisInput &touch) {}
 
 	virtual void RecreateViews() {}
 
@@ -143,6 +144,9 @@ public:
 
 	void getFocusPosition(float &x, float &y, float &z);
 
+	// Will delete any existing overlay screen.
+	void SetOverlayScreen(Screen *screen);
+
 	std::recursive_mutex inputLock_;
 
 private:
@@ -156,8 +160,10 @@ private:
 	PostRenderCallback postRenderCb_ = nullptr;
 	void *postRenderUserdata_ = nullptr;
 
-	const Screen *dialogFinished_;
-	DialogResult dialogResult_;
+	const Screen *dialogFinished_ = nullptr;
+	DialogResult dialogResult_{};
+
+	Screen *overlayScreen_ = nullptr;
 
 	struct Layer {
 		Screen *screen;

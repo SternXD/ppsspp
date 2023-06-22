@@ -55,6 +55,7 @@
 #include "UI/Theme.h"
 
 #include "Common/File/FileUtil.h"
+#include "Common/File/AndroidContentURI.h"
 #include "Common/OSVersion.h"
 #include "Common/TimeUtil.h"
 #include "Common/StringUtils.h"
@@ -88,14 +89,13 @@
 #if PPSSPP_PLATFORM(ANDROID)
 
 #include "android/jni/AndroidAudio.h"
-#include "android/jni/AndroidContentURI.h"
 
 extern AndroidAudioState *g_audioState;
 
 #endif
 
 GameSettingsScreen::GameSettingsScreen(const Path &gamePath, std::string gameID, bool editThenRestore)
-	: UIDialogScreenWithGameBackground(gamePath), gameID_(gameID), editThenRestore_(editThenRestore) {
+	: TabbedUIDialogScreenWithGameBackground(gamePath), gameID_(gameID), editThenRestore_(editThenRestore) {
 	prevInflightFrames_ = g_Config.iInflightFrames;
 	analogSpeedMapped_ = KeyMap::InputMappingsFromPspButton(VIRTKEY_SPEED_ANALOG, nullptr, true);
 }
@@ -191,7 +191,7 @@ static std::string PostShaderTranslateName(const char *value) {
 	}
 }
 
-void GameSettingsScreen::CreateViews() {
+void GameSettingsScreen::PreCreateViews() {
 	ReloadAllPostShaderInfo(screenManager()->getDrawContext());
 	ReloadAllThemeInfo();
 
@@ -203,49 +203,11 @@ void GameSettingsScreen::CreateViews() {
 	iAlternateSpeedPercent1_ = g_Config.iFpsLimit1 < 0 ? -1 : (g_Config.iFpsLimit1 * 100) / 60;
 	iAlternateSpeedPercent2_ = g_Config.iFpsLimit2 < 0 ? -1 : (g_Config.iFpsLimit2 * 100) / 60;
 	iAlternateSpeedPercentAnalog_ = (g_Config.iAnalogFpsLimit * 100) / 60;
+}
 
-	bool vertical = UseVerticalLayout();
-
-	// Information in the top left.
-	// Back button to the bottom left.
-	// Scrolling action menu to the right.
+void GameSettingsScreen::CreateTabs() {
 	using namespace UI;
-
 	auto ms = GetI18NCategory(I18NCat::MAINSETTINGS);
-	auto di = GetI18NCategory(I18NCat::DIALOG);
-
-	root_ = new AnchorLayout(new LayoutParams(FILL_PARENT, FILL_PARENT));
-
-	if (vertical) {
-		LinearLayout *verticalLayout = new LinearLayout(ORIENT_VERTICAL, new LayoutParams(FILL_PARENT, FILL_PARENT));
-		tabHolder_ = new TabHolder(ORIENT_HORIZONTAL, 200, new LinearLayoutParams(1.0f));
-		verticalLayout->Add(tabHolder_);
-		verticalLayout->Add(new Choice(di->T("Back"), "", false, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, 0.0f, Margins(0))))->OnClick.Handle<UIScreen>(this, &UIScreen::OnBack);
-		root_->Add(verticalLayout);
-	} else {
-		tabHolder_ = new TabHolder(ORIENT_VERTICAL, 200, new AnchorLayoutParams(10, 0, 10, 0, false));
-		root_->Add(tabHolder_);
-		AddStandardBack(root_);
-	}
-	tabHolder_->SetTag("GameSettings");
-	root_->SetDefaultFocusView(tabHolder_);
-	settingTabContents_.clear();
-	settingTabFilterNotices_.clear();
-
-	float leftSide = 40.0f;
-	if (!vertical) {
-		leftSide += 200.0f;
-	}
-	settingInfo_ = new SettingInfoMessage(ALIGN_CENTER | FLAG_WRAP_TEXT, new AnchorLayoutParams(
-		g_display.dp_xres - leftSide - 40.0f, WRAP_CONTENT,
-		leftSide, g_display.dp_yres - 80.0f - 40.0f, NONE, NONE));
-	settingInfo_->SetBottomCutoff(g_display.dp_yres - 200.0f);
-	root_->Add(settingInfo_);
-
-	// Show it again if we recreated the view
-	if (!oldSettingInfo_.empty()) {
-		settingInfo_->Show(oldSettingInfo_, nullptr);
-	}
 
 	LinearLayout *graphicsSettings = AddTab("GameSettingsGraphics", ms->T("Graphics"));
 	CreateGraphicsSettings(graphicsSettings);
@@ -271,27 +233,6 @@ void GameSettingsScreen::CreateViews() {
 		LinearLayout *vrSettings = AddTab("GameSettingsVR", ms->T("VR"));
 		CreateVRSettings(vrSettings);
 	}
-
-#if !defined(MOBILE_DEVICE) || PPSSPP_PLATFORM(ANDROID)
-	// Hide search if screen is too small.
-	if ((g_display.dp_xres < g_display.dp_yres || g_display.dp_yres >= 500) && (deviceType != DEVICE_TYPE_VR)) {
-		auto se = GetI18NCategory(I18NCat::SEARCH);
-		// Search
-		LinearLayout *searchSettings = AddTab("GameSettingsSearch", ms->T("Search"), true);
-
-		searchSettings->Add(new ItemHeader(se->T("Find settings")));
-		if (System_GetPropertyBool(SYSPROP_HAS_KEYBOARD)) {
-			searchSettings->Add(new ChoiceWithValueDisplay(&searchFilter_, se->T("Filter"), I18NCat::NONE))->OnClick.Handle(this, &GameSettingsScreen::OnChangeSearchFilter);
-		} else {
-			searchSettings->Add(new PopupTextInputChoice(&searchFilter_, se->T("Filter"), "", 64, screenManager()))->OnChange.Handle(this, &GameSettingsScreen::OnChangeSearchFilter);
-		}
-		clearSearchChoice_ = searchSettings->Add(new Choice(se->T("Clear filter")));
-		clearSearchChoice_->OnClick.Handle(this, &GameSettingsScreen::OnClearSearchFilter);
-		noSearchResults_ = searchSettings->Add(new TextView(se->T("No settings matched '%1'"), new LinearLayoutParams(Margins(20, 5))));
-
-		ApplySearchFilter();
-	}
-#endif
 }
 
 // Graphics
@@ -367,6 +308,18 @@ void GameSettingsScreen::CreateGraphicsSettings(UI::ViewGroup *graphicsSettings)
 			}
 		}
 	}
+
+#if PPSSPP_PLATFORM(ANDROID)
+	if ((deviceType != DEVICE_TYPE_TV) && (deviceType != DEVICE_TYPE_VR)) {
+		static const char *deviceResolutions[] = { "Native device resolution", "Auto (same as Rendering)", "1x PSP", "2x PSP", "3x PSP", "4x PSP", "5x PSP" };
+		int max_res_temp = std::max(System_GetPropertyInt(SYSPROP_DISPLAY_XRES), System_GetPropertyInt(SYSPROP_DISPLAY_YRES)) / 480 + 2;
+		if (max_res_temp == 3)
+			max_res_temp = 4;  // At least allow 2x
+		int max_res = std::min(max_res_temp, (int)ARRAY_SIZE(deviceResolutions));
+		UI::PopupMultiChoice *hwscale = graphicsSettings->Add(new PopupMultiChoice(&g_Config.iAndroidHwScale, gr->T("Display Resolution (HW scaler)"), deviceResolutions, 0, max_res, I18NCat::GRAPHICS, screenManager()));
+		hwscale->OnChoice.Handle(this, &GameSettingsScreen::OnHwScaleChange);  // To refresh the display mode
+	}
+#endif
 
 	if (deviceType != DEVICE_TYPE_VR) {
 #if !defined(MOBILE_DEVICE)
@@ -1147,6 +1100,9 @@ void GameSettingsScreen::CreateVRSettings(UI::ViewGroup *vrSettings) {
 	vr6DoF->SetEnabledPtr(&g_Config.bEnableVR);
 	vrSettings->Add(new CheckBox(&g_Config.bEnableStereo, vr->T("Stereoscopic vision (Experimental)")));
 	vrSettings->Add(new CheckBox(&g_Config.bForce72Hz, vr->T("Force 72Hz update")));
+	if (IsPassthroughSupported()) {
+		vrSettings->Add(new CheckBox(&g_Config.bPassthrough, vr->T("Enable passthrough")));
+	}
 
 	vrSettings->Add(new ItemHeader(vr->T("VR camera")));
 	vrSettings->Add(new PopupSliderChoiceFloat(&g_Config.fCanvasDistance, 1.0f, 15.0f, 12.0f, vr->T("Distance to 2D menus and scenes"), 1.0f, screenManager(), ""));
@@ -1167,29 +1123,6 @@ void GameSettingsScreen::CreateVRSettings(UI::ViewGroup *vrSettings) {
 	vrMotions->SetEnabledPtr(&g_Config.bEnableMotions);
 	static const char *cameraPitchModes[] = { "Disabled", "Top view -> First person", "First person -> Top view" };
 	vrSettings->Add(new PopupMultiChoice(&g_Config.iCameraPitch, vr->T("Camera type"), cameraPitchModes, 0, 3, I18NCat::NONE, screenManager()));
-}
-
-UI::LinearLayout *GameSettingsScreen::AddTab(const char *tag, const std::string &title, bool isSearch) {
-	auto se = GetI18NCategory(I18NCat::SEARCH);
-
-	using namespace UI;
-	ViewGroup *scroll = new ScrollView(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, FILL_PARENT));
-	scroll->SetTag(tag);
-
-	LinearLayout *contents = new LinearLayoutList(ORIENT_VERTICAL);
-	contents->SetSpacing(0);
-	scroll->Add(contents);
-	tabHolder_->AddTab(title, scroll);
-    
-	if (!isSearch) {
-		settingTabContents_.push_back(contents);
-
-		auto notice = contents->Add(new TextView(se->T("Filtering settings by '%1'"), new LinearLayoutParams(Margins(20, 5))));
-		notice->SetVisibility(V_GONE);
-		settingTabFilterNotices_.push_back(notice);
-	}
-
-	return contents;
 }
 
 UI::EventReturn GameSettingsScreen::OnAutoFrameskip(UI::EventParams &e) {
@@ -1213,6 +1146,9 @@ UI::EventReturn GameSettingsScreen::OnAdhocGuides(UI::EventParams &e) {
 
 UI::EventReturn GameSettingsScreen::OnImmersiveModeChange(UI::EventParams &e) {
 	System_Notify(SystemNotification::IMMERSIVE_MODE_CHANGE);
+	if (g_Config.iAndroidHwScale != 0) {
+		System_RecreateActivity();
+	}
 	return UI::EVENT_DONE;
 }
 
@@ -1334,8 +1270,16 @@ UI::EventReturn GameSettingsScreen::OnFullscreenMultiChange(UI::EventParams &e) 
 }
 
 UI::EventReturn GameSettingsScreen::OnResolutionChange(UI::EventParams &e) {
+	if (g_Config.iAndroidHwScale == 1) {
+		System_RecreateActivity();
+	}
 	Reporting::UpdateConfig();
 	NativeMessageReceived("gpu_renderResized", "");
+	return UI::EVENT_DONE;
+}
+
+UI::EventReturn GameSettingsScreen::OnHwScaleChange(UI::EventParams &e) {
+	System_RecreateActivity();
 	return UI::EVENT_DONE;
 }
 
@@ -1362,54 +1306,6 @@ void GameSettingsScreen::onFinish(DialogResult result) {
 	NativeMessageReceived("gpu_configChanged", "");
 }
 
-void GameSettingsScreen::sendMessage(const char *message, const char *value) {
-	UIDialogScreenWithGameBackground::sendMessage(message, value);
-	if (!strcmp(message, "gameSettings_search")) {
-		std::string filter = value ? value : "";
-		searchFilter_.resize(filter.size());
-		std::transform(filter.begin(), filter.end(), searchFilter_.begin(), tolower);
-
-		ApplySearchFilter();
-	}
-}
-
-void GameSettingsScreen::ApplySearchFilter() {
-	auto se = GetI18NCategory(I18NCat::SEARCH);
-
-	bool matches = searchFilter_.empty();
-	for (int t = 0; t < (int)settingTabContents_.size(); ++t) {
-		auto tabContents = settingTabContents_[t];
-		bool tabMatches = searchFilter_.empty();
-
-		// Show an indicator that a filter is applied.
-		settingTabFilterNotices_[t]->SetVisibility(tabMatches ? UI::V_GONE : UI::V_VISIBLE);
-		settingTabFilterNotices_[t]->SetText(ReplaceAll(se->T("Filtering settings by '%1'"), "%1", searchFilter_));
-
-		UI::View *lastHeading = nullptr;
-		for (int i = 1; i < tabContents->GetNumSubviews(); ++i) {
-			UI::View *v = tabContents->GetViewByIndex(i);
-			if (!v->CanBeFocused()) {
-				lastHeading = v;
-			}
-
-			std::string label = v->DescribeText();
-			std::transform(label.begin(), label.end(), label.begin(), tolower);
-			bool match = v->CanBeFocused() && label.find(searchFilter_) != label.npos;
-			tabMatches = tabMatches || match;
-
-			if (match && lastHeading)
-				lastHeading->SetVisibility(UI::V_VISIBLE);
-			v->SetVisibility(searchFilter_.empty() || match ? UI::V_VISIBLE : UI::V_GONE);
-		}
-		tabHolder_->EnableTab(t, tabMatches);
-		matches = matches || tabMatches;
-	}
-
-	noSearchResults_->SetText(ReplaceAll(se->T("No settings matched '%1'"), "%1", searchFilter_));
-	noSearchResults_->SetVisibility(matches ? UI::V_GONE : UI::V_VISIBLE);
-	clearSearchChoice_->SetVisibility(searchFilter_.empty() ? UI::V_GONE : UI::V_VISIBLE);
-}
-
 void GameSettingsScreen::dialogFinished(const Screen *dialog, DialogResult result) {
 	if (result == DialogResult::DR_OK) {
 		g_Config.iFpsLimit1 = iAlternateSpeedPercent1_ < 0 ? -1 : (iAlternateSpeedPercent1_ * 60) / 100;
@@ -1424,11 +1320,6 @@ void GameSettingsScreen::dialogFinished(const Screen *dialog, DialogResult resul
 		analogSpeedMapped_ = mapped;
 		RecreateViews();
 	}
-}
-
-void GameSettingsScreen::RecreateViews() {
-	oldSettingInfo_ = settingInfo_->GetText();
-	UIScreen::RecreateViews();
 }
 
 void GameSettingsScreen::CallbackMemstickFolder(bool yes) {
@@ -1702,24 +1593,6 @@ UI::EventReturn GameSettingsScreen::OnSavedataManager(UI::EventParams &e) {
 
 UI::EventReturn GameSettingsScreen::OnSysInfo(UI::EventParams &e) {
 	screenManager()->push(new SystemInfoScreen(gamePath_));
-	return UI::EVENT_DONE;
-}
-
-UI::EventReturn GameSettingsScreen::OnChangeSearchFilter(UI::EventParams &e) {
-#if PPSSPP_PLATFORM(WINDOWS) || defined(USING_QT_UI) || defined(__ANDROID__)
-	auto se = GetI18NCategory(I18NCat::SEARCH);
-	System_InputBoxGetString(se->T("Search term"), searchFilter_, [](const std::string &value, int) {
-		NativeMessageReceived("gameSettings_search", StripSpaces(value).c_str());
-	});
-#else
-	if (!System_GetPropertyBool(SYSPROP_HAS_KEYBOARD))
-		NativeMessageReceived("gameSettings_search", StripSpaces(searchFilter_).c_str());
-#endif
-	return UI::EVENT_DONE;
-}
-
-UI::EventReturn GameSettingsScreen::OnClearSearchFilter(UI::EventParams &e) {
-	NativeMessageReceived("gameSettings_search", "");
 	return UI::EVENT_DONE;
 }
 
@@ -2047,7 +1920,7 @@ void HostnameSelectScreen::CreatePopupContents(UI::ViewGroup *parent) {
 	progressView_->SetVisibility(UI::V_GONE);
 }
 
-void HostnameSelectScreen::SendEditKey(int keyCode, int flags) {
+void HostnameSelectScreen::SendEditKey(InputKeyCode keyCode, int flags) {
 	auto oldView = UI::GetFocusedView();
 	UI::SetFocusedView(addrView_);
 	KeyInput fakeKey{ DEVICE_ID_KEYBOARD, keyCode, KEY_DOWN | flags };
@@ -2058,13 +1931,13 @@ void HostnameSelectScreen::SendEditKey(int keyCode, int flags) {
 UI::EventReturn HostnameSelectScreen::OnNumberClick(UI::EventParams &e) {
 	std::string text = e.v ? e.v->Tag() : "";
 	if (text.length() == 1 && text[0] >= '0' && text[0] <= '9') {
-		SendEditKey(text[0], KEY_CHAR);
+		SendEditKey((InputKeyCode)text[0], KEY_CHAR);  // ASCII for digits match keycodes.
 	}
 	return UI::EVENT_DONE;
 }
 
 UI::EventReturn HostnameSelectScreen::OnPointClick(UI::EventParams &e) {
-	SendEditKey('.', KEY_CHAR);
+	SendEditKey(NKCODE_PERIOD, KEY_CHAR);
 	return UI::EVENT_DONE;
 }
 

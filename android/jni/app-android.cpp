@@ -946,7 +946,7 @@ extern "C" bool Java_org_ppsspp_ppsspp_NativeRenderer_displayInit(JNIEnv * env, 
 		}
 
 		graphicsContext->GetDrawContext()->SetErrorCallback([](const char *shortDesc, const char *details, void *userdata) {
-			System_NotifyUserMessage(details, 5.0, 0xFFFFFFFF, "error_callback");
+			g_OSD.Show(OSDType::MESSAGE_ERROR, details, 5.0);
 		}, nullptr);
 
 		EmuThreadStart();
@@ -962,7 +962,7 @@ extern "C" bool Java_org_ppsspp_ppsspp_NativeRenderer_displayInit(JNIEnv * env, 
 		}
 
 		graphicsContext->GetDrawContext()->SetErrorCallback([](const char *shortDesc, const char *details, void *userdata) {
-			System_NotifyUserMessage(details, 5.0, 0xFFFFFFFF, "error_callback");
+			g_OSD.Show(OSDType::MESSAGE_ERROR, details, 5.0);
 		}, nullptr);
 
 		graphicsContext->ThreadStart();
@@ -1045,6 +1045,9 @@ bool System_MakeRequest(SystemRequestType type, int requestId, const std::string
 		return true;
 	case SystemRequestType::RESTART_APP:
 		PushCommand("graphics_restart", param1);
+		return true;
+	case SystemRequestType::RECREATE_ACTIVITY:
+		PushCommand("recreate", param1);
 		return true;
 	case SystemRequestType::INPUT_TEXT_MODAL:
 	{
@@ -1178,8 +1181,8 @@ extern "C" void JNICALL Java_org_ppsspp_ppsspp_NativeApp_touch
 
 extern "C" jboolean Java_org_ppsspp_ppsspp_NativeApp_keyDown(JNIEnv *, jclass, jint deviceId, jint key, jboolean isRepeat) {
 	KeyInput keyInput;
-	keyInput.deviceId = deviceId;
-	keyInput.keyCode = key;
+	keyInput.deviceId = (InputDeviceID)deviceId;
+	keyInput.keyCode = (InputKeyCode)key;
 	keyInput.flags = KEY_DOWN;
 	if (isRepeat) {
 		keyInput.flags |= KEY_IS_REPEAT;
@@ -1189,8 +1192,8 @@ extern "C" jboolean Java_org_ppsspp_ppsspp_NativeApp_keyDown(JNIEnv *, jclass, j
 
 extern "C" jboolean Java_org_ppsspp_ppsspp_NativeApp_keyUp(JNIEnv *, jclass, jint deviceId, jint key) {
 	KeyInput keyInput;
-	keyInput.deviceId = deviceId;
-	keyInput.keyCode = key;
+	keyInput.deviceId = (InputDeviceID)deviceId;
+	keyInput.keyCode = (InputKeyCode)key;
 	keyInput.flags = KEY_UP;
 	return NativeKey(keyInput);
 }
@@ -1201,8 +1204,8 @@ extern "C" void Java_org_ppsspp_ppsspp_NativeApp_joystickAxis(
 		return;
 
 	AxisInput axis;
-	axis.axisId = axisId;
-	axis.deviceId = deviceId;
+	axis.axisId = (InputAxis)axisId;
+	axis.deviceId = (InputDeviceID)deviceId;
 	axis.value = value;
 
 	NativeAxis(axis);
@@ -1283,6 +1286,50 @@ extern "C" void JNICALL Java_org_ppsspp_ppsspp_NativeActivity_requestExitVulkanR
 	}
 }
 
+void correctRatio(int &sz_x, int &sz_y, float scale) {
+	float x = (float)sz_x;
+	float y = (float)sz_y;
+	float ratio = x / y;
+	INFO_LOG(G3D, "CorrectRatio: Considering size: %0.2f/%0.2f=%0.2f for scale %f", x, y, ratio, scale);
+	float targetRatio;
+
+	// Try to get the longest dimension to match scale*PSP resolution.
+	if (x >= y) {
+		targetRatio = 480.0f / 272.0f;
+		x = 480.f * scale;
+		y = 272.f * scale;
+	} else {
+		targetRatio = 272.0f / 480.0f;
+		x = 272.0f * scale;
+		y = 480.0f * scale;
+	}
+
+	float correction = targetRatio / ratio;
+	INFO_LOG(G3D, "Target ratio: %0.2f ratio: %0.2f correction: %0.2f", targetRatio, ratio, correction);
+	if (ratio < targetRatio) {
+		y *= correction;
+	} else {
+		x /= correction;
+	}
+
+	sz_x = x;
+	sz_y = y;
+	INFO_LOG(G3D, "Corrected ratio: %dx%d", sz_x, sz_y);
+}
+
+void getDesiredBackbufferSize(int &sz_x, int &sz_y) {
+	sz_x = display_xres;
+	sz_y = display_yres;
+	std::string config = NativeQueryConfig("hwScale");
+	int scale;
+	if (1 == sscanf(config.c_str(), "%d", &scale) && scale > 0) {
+		correctRatio(sz_x, sz_y, scale);
+	} else {
+		sz_x = 0;
+		sz_y = 0;
+	}
+}
+
 extern "C" void JNICALL Java_org_ppsspp_ppsspp_NativeApp_setDisplayParameters(JNIEnv *, jclass, jint xres, jint yres, jint dpi, jfloat refreshRate) {
 	INFO_LOG(G3D, "NativeApp.setDisplayParameters(%d x %d, dpi=%d, refresh=%0.2f)", xres, yres, dpi, refreshRate);
 
@@ -1309,6 +1356,18 @@ extern "C" void JNICALL Java_org_ppsspp_ppsspp_NativeApp_setDisplayParameters(JN
 		recalculateDpi();
 		NativeResized();
 	}
+}
+
+extern "C" void JNICALL Java_org_ppsspp_ppsspp_NativeApp_computeDesiredBackbufferDimensions() {
+	getDesiredBackbufferSize(desiredBackbufferSizeX, desiredBackbufferSizeY);
+}
+
+extern "C" jint JNICALL Java_org_ppsspp_ppsspp_NativeApp_getDesiredBackbufferWidth(JNIEnv *, jclass) {
+	return desiredBackbufferSizeX;
+}
+
+extern "C" jint JNICALL Java_org_ppsspp_ppsspp_NativeApp_getDesiredBackbufferHeight(JNIEnv *, jclass) {
+	return desiredBackbufferSizeY;
 }
 
 std::vector<std::string> System_GetCameraDeviceList() {

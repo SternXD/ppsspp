@@ -87,10 +87,12 @@
 #define MOUSEEVENTF_FROMTOUCH_NOPEN 0xFF515780 //http://msdn.microsoft.com/en-us/library/windows/desktop/ms703320(v=vs.85).aspx
 #define MOUSEEVENTF_MASK_PLUS_PENTOUCH 0xFFFFFF80
 
+// See https://github.com/unknownbrackets/verysleepy/commit/fc1b1b3bd6081fae3566cdb542d896e413238b71
 int verysleepy__useSendMessage = 1;
 
 const UINT WM_VERYSLEEPY_MSG = WM_APP + 0x3117;
 const UINT WM_USER_GET_BASE_POINTER = WM_APP + 0x3118;  // 0xB118
+const UINT WM_USER_GET_EMULATION_STATE = WM_APP + 0x3119;  // 0xB119
 
 // Respond TRUE to a message with this param value to indicate support.
 const WPARAM VERYSLEEPY_WPARAM_SUPPORTED = 0;
@@ -266,14 +268,14 @@ namespace MainWindow
 	}
 
 	void ReleaseMouseWheel() {
-			// For simplicity release both wheel events
-			KeyInput key;
-			key.deviceId = DEVICE_ID_MOUSE;
-			key.flags = KEY_UP;
-			key.keyCode = NKCODE_EXT_MOUSEWHEEL_DOWN;
-			NativeKey(key);
-			key.keyCode = NKCODE_EXT_MOUSEWHEEL_UP;
-			NativeKey(key);
+		// For simplicity release both wheel events
+		KeyInput key;
+		key.deviceId = DEVICE_ID_MOUSE;
+		key.flags = KEY_UP;
+		key.keyCode = NKCODE_EXT_MOUSEWHEEL_DOWN;
+		NativeKey(key);
+		key.keyCode = NKCODE_EXT_MOUSEWHEEL_UP;
+		NativeKey(key);
 	}
 
 	static void HandleSizeChange(int newSizingType) {
@@ -375,6 +377,7 @@ namespace MainWindow
 				int totalHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 				MoveWindow(hwndMain, totalX, totalY, totalWidth, totalHeight, TRUE);
 				HandleSizeChange(oldWindowState);
+				ShowWindow(hwndMain, SW_SHOW);
 			} else {
 				ShowWindow(hwndMain, SW_MAXIMIZE);
 			}
@@ -655,15 +658,22 @@ namespace MainWindow
 
 				// Simulate doubleclick, doesn't work with RawInput enabled
 				static double lastMouseDown;
+				static float lastMouseDownX = -1.0f;
+				static float lastMouseDownY = -1.0f;
 				double now = time_now_d();
 				if ((now - lastMouseDown) < 0.001 * GetDoubleClickTime()) {
-					if (!g_Config.bShowTouchControls && !g_Config.bMouseControl && GetUIState() == UISTATE_INGAME && g_Config.bFullscreenOnDoubleclick) {
+					float dx = lastMouseDownX - x;
+					float dy = lastMouseDownX - x;
+					float distSq = dx * dx + dy * dy;
+					if (distSq < 3.0f*3.0f && !g_Config.bShowTouchControls && !g_Config.bMouseControl && GetUIState() == UISTATE_INGAME && g_Config.bFullscreenOnDoubleclick) {
 						SendToggleFullscreen(!g_Config.UseFullScreen());
 					}
 					lastMouseDown = 0.0;
 				} else {
 					lastMouseDown = now;
 				}
+				lastMouseDownX = x;
+				lastMouseDownY = y;
 			}
 			break;
 
@@ -787,6 +797,9 @@ namespace MainWindow
 				return 0;
 			}
 			break;
+
+		case WM_USER_GET_EMULATION_STATE:
+			return (u32)(Core_IsActive() && GetUIState() == UISTATE_INGAME);
 
 		// Hack to kill the white line underneath the menubar.
 		// From https://stackoverflow.com/questions/57177310/how-to-paint-over-white-line-between-menu-bar-and-client-area-of-window

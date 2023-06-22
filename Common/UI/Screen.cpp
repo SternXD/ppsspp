@@ -6,6 +6,7 @@
 #include "Common/UI/UI.h"
 #include "Common/UI/View.h"
 #include "Common/UI/ViewGroup.h"
+#include "Common/UI/IconCache.h"
 
 #include "Common/Log.h"
 #include "Common/TimeUtil.h"
@@ -51,6 +52,12 @@ void ScreenManager::update() {
 	if (stack_.size()) {
 		stack_.back().screen->update();
 	}
+
+	if (overlayScreen_) {
+		overlayScreen_->update();
+	}
+
+	g_iconCache.FrameUpdate();
 }
 
 void ScreenManager::switchToNext() {
@@ -82,11 +89,11 @@ void ScreenManager::touch(const TouchInput &touch) {
 	if (touch.flags & TOUCH_RELEASE_ALL) {
 		for (auto &layer : stack_) {
 			Screen *screen = layer.screen;
-			layer.screen->touch(screen->transformTouch(touch));
+			layer.screen->UnsyncTouch(screen->transformTouch(touch));
 		}
 	} else if (!stack_.empty()) {
 		Screen *screen = stack_.back().screen;
-		stack_.back().screen->touch(screen->transformTouch(touch));
+		stack_.back().screen->UnsyncTouch(screen->transformTouch(touch));
 	}
 }
 
@@ -96,10 +103,10 @@ bool ScreenManager::key(const KeyInput &key) {
 	// Send key up to every screen layer, to avoid stuck keys.
 	if (key.flags & KEY_UP) {
 		for (auto &layer : stack_) {
-			result = layer.screen->key(key);
+			result = layer.screen->UnsyncKey(key);
 		}
 	} else if (!stack_.empty()) {
-		result = stack_.back().screen->key(key);
+		result = stack_.back().screen->UnsyncKey(key);
 	}
 	return result;
 }
@@ -120,16 +127,17 @@ void ScreenManager::axis(const AxisInput &axis) {
 	// Send center axis to every screen layer.
 	if (axis.value == 0) {
 		for (auto &layer : stack_) {
-			layer.screen->axis(axis);
+			layer.screen->UnsyncAxis(axis);
 		}
 	} else if (!stack_.empty()) {
-		stack_.back().screen->axis(axis);
+		stack_.back().screen->UnsyncAxis(axis);
 	}
 }
 
 void ScreenManager::deviceLost() {
 	for (auto &iter : stack_)
 		iter.screen->deviceLost();
+	g_iconCache.ClearTextures();
 }
 
 void ScreenManager::deviceRestored() {
@@ -170,6 +178,9 @@ void ScreenManager::render() {
 				stack_.back().screen->render();
 				if (postRenderCb_)
 					postRenderCb_(getUIContext(), postRenderUserdata_);
+				if (overlayScreen_) {
+					overlayScreen_->render();
+				}
 				backback.screen->postRender();
 				break;
 			}
@@ -179,6 +190,9 @@ void ScreenManager::render() {
 			stack_.back().screen->render();
 			if (postRenderCb_)
 				postRenderCb_(getUIContext(), postRenderUserdata_);
+			if (overlayScreen_) {
+				overlayScreen_->render();
+			}
 			stack_.back().screen->postRender();
 			break;
 		}
@@ -229,6 +243,8 @@ void ScreenManager::shutdown() {
 	for (auto layer : nextStack_)
 		delete layer.screen;
 	nextStack_.clear();
+	delete overlayScreen_;
+	overlayScreen_ = nullptr;
 }
 
 void ScreenManager::push(Screen *screen, int layerFlags) {
@@ -320,4 +336,12 @@ void ScreenManager::processFinishDialog() {
 		delete dialogFinished_;
 		dialogFinished_ = nullptr;
 	}
+}
+
+void ScreenManager::SetOverlayScreen(Screen *screen) {
+	if (overlayScreen_) {
+		delete overlayScreen_;
+	}
+	overlayScreen_ = screen;
+	overlayScreen_->setScreenManager(this);
 }

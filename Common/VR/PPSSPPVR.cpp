@@ -46,7 +46,7 @@ enum VRMirroring {
 
 static VRAppMode appMode = VR_MENU_MODE;
 static std::map<int, std::map<int, float> > pspAxis;
-static std::map<int, bool> pspKeys;
+static std::map<int, bool> pspKeys;  // key can be virtual, so not using the enum.
 
 static int vr3DGeometryCount = 0;
 static long vrCompat[VR_COMPAT_MAX];
@@ -69,11 +69,11 @@ VR button mapping
 
 struct ButtonMapping {
 	ovrButton ovr;
-	int keycode;
+	InputKeyCode keycode;
 	bool pressed;
 	int repeat;
 
-	ButtonMapping(int keycode, ovrButton ovr) {
+	ButtonMapping(InputKeyCode keycode, ovrButton ovr) {
 		this->keycode = keycode;
 		this->ovr = ovr;
 		pressed = false;
@@ -106,7 +106,7 @@ static std::vector<ButtonMapping> rightControllerMapping = {
 		ButtonMapping(NKCODE_ENTER, ovrButton_Trigger),
 };
 
-static const int controllerIds[] = {DEVICE_ID_XR_CONTROLLER_LEFT, DEVICE_ID_XR_CONTROLLER_RIGHT};
+static const InputDeviceID controllerIds[] = {DEVICE_ID_XR_CONTROLLER_LEFT, DEVICE_ID_XR_CONTROLLER_RIGHT};
 static std::vector<ButtonMapping> controllerMapping[2] = {
 		leftControllerMapping,
 		rightControllerMapping
@@ -162,6 +162,7 @@ void InitVROnAndroid(void* vm, void* activity, const char* system, int version, 
 	} else if ((strcmp(vendor, "META") == 0) || (strcmp(vendor, "OCULUS") == 0)) {
 		VR_SetPlatformFLag(VR_PLATFORM_CONTROLLER_QUEST, true);
 		VR_SetPlatformFLag(VR_PLATFORM_EXTENSION_FOVEATION, true);
+		VR_SetPlatformFLag(VR_PLATFORM_EXTENSION_PASSTHROUGH, true);
 		VR_SetPlatformFLag(VR_PLATFORM_EXTENSION_PERFORMANCE, true);
 	}
 	VR_SetPlatformFLag(VR_PLATFORM_RENDERER_VULKAN, (GPUBackend)g_Config.iGPUBackend == GPUBackend::VULKAN);
@@ -223,7 +224,7 @@ void SetVRAppMode(VRAppMode mode) {
 
 void UpdateVRInput(bool haptics, float dp_xscale, float dp_yscale) {
 	//axis
-	if (pspKeys[VIRTKEY_VR_CAMERA_ADJUST]) {
+	if (pspKeys[(int)VIRTKEY_VR_CAMERA_ADJUST]) {
 		AxisInput axis = {};
 		for (int j = 0; j < 2; j++) {
 			XrVector2f joystick = IN_VRGetJoystickState(j);
@@ -254,6 +255,7 @@ void UpdateVRInput(bool haptics, float dp_xscale, float dp_yscale) {
 			keyInput.deviceId = controllerIds[j];
 
 			//process the key action
+
 			if (m.pressed != pressed) {
 				if (pressed && haptics) {
 					INVR_Vibrate(100, j, 1000);
@@ -446,7 +448,8 @@ void UpdateVRInput(bool haptics, float dp_xscale, float dp_yscale) {
 			mousePressed = pressed;
 		}
 
-		//mouse wheel emulation
+		// mouse wheel emulation
+		// TODO: Spams key-up events if nothing changed!
 		for (int j = 0; j < 2; j++) {
 			keyInput.deviceId = controllerIds[j];
 			float scroll = -IN_VRGetJoystickState(j).y;
@@ -513,7 +516,7 @@ bool UpdateVRKeys(const KeyInput &key) {
 		pspKeys[VIRTKEY_VR_CAMERA_ADJUST] = false;
 		for (auto& pspKey : pspKeys) {
 			if (pspKey.second) {
-				keyUp.keyCode = pspKey.first;
+				keyUp.keyCode = (InputKeyCode)pspKey.first;
 				NativeKey(keyUp);
 			}
 		}
@@ -558,12 +561,15 @@ void PreprocessSkyplane(GLRStep* step) {
 
 	// Clear sky with the fog color.
 	if (!vrCompat[VR_COMPAT_FBO_CLEAR]) {
-		GLRRenderData skyClear {};
+		GLRRenderData &skyClear = step->commands.insert(step->commands.begin());
 		skyClear.cmd = GLRRenderCommand::CLEAR;
 		skyClear.clear.colorMask = 0xF;
-		skyClear.clear.clearMask = GL_COLOR_BUFFER_BIT;
+		skyClear.clear.clearMask = GL_COLOR_BUFFER_BIT;  // don't need to initialize clearZ, clearStencil
 		skyClear.clear.clearColor = vrCompat[VR_COMPAT_FOG_COLOR];
-		step->commands.insert(step->commands.begin(), skyClear);
+		skyClear.clear.scissorX = 0;
+		skyClear.clear.scissorY = 0;
+		skyClear.clear.scissorW = 0;  // signal no scissor
+		skyClear.clear.scissorH = 0;
 		vrCompat[VR_COMPAT_FBO_CLEAR] = true;
 	}
 
@@ -572,8 +578,8 @@ void PreprocessSkyplane(GLRStep* step) {
 	for (auto& command : step->commands) {
 		if (command.cmd == GLRRenderCommand::DEPTH) {
 			depthEnabled = command.depth.enabled;
-		} else if ((command.cmd == GLRRenderCommand::DRAW_INDEXED) && !depthEnabled) {
-			command.drawIndexed.count = 0;
+		} else if ((command.cmd == GLRRenderCommand::DRAW && command.draw.indexBuffer != nullptr) && !depthEnabled) {
+			command.draw.count = 0;
 		}
 	}
 }
@@ -787,6 +793,7 @@ bool StartVRRender() {
 		// Set customizations
 		__DisplaySetFramerate(g_Config.bForce72Hz ? 72 : 60);
 		VR_SetConfigFloat(VR_CONFIG_CANVAS_DISTANCE, g_Config.fCanvasDistance);
+		VR_SetConfig(VR_CONFIG_PASSTHROUGH, g_Config.bPassthrough);
 		vrMirroring[VR_MIRRORING_UPDATED] = false;
 		return true;
 	}
@@ -821,6 +828,10 @@ int GetVRPassesCount() {
 
 bool IsMultiviewSupported() {
 	return false;
+}
+
+bool IsPassthroughSupported() {
+	return VR_GetPlatformFlag(VR_PLATFORM_EXTENSION_PASSTHROUGH);
 }
 
 bool IsFlatVRGame() {
