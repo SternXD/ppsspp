@@ -35,7 +35,10 @@ jobs:
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.1
-
+   
+    - name: Install winget
+      run: winget install winget
+    
     - name: Install makeappx.exe
       run: winget install makeappx
 
