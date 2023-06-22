@@ -42,10 +42,10 @@ jobs:
         msbuild /m /p:TrackFileAccess=false /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=x64 /p:AppxPackageSigningEnabled=false UWP/PPSSPP_UWP.sln
         
         # Package the app into an AppX executable.
-        C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\AppxPackaging\AppxPackage\MakeAppx.exe pack /l
+        "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\AppxPackaging\AppxPackage\MakeAppx.exe" pack /l
         
         # Sign the AppX package.
-        C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe sign /f ppsspp/UWP/PPSSPP_UWP_TemporaryKey.pfx PPSSPP_UWP.appx
+        "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /f ppsspp/UWP/PPSSPP_UWP_TemporaryKey.pfx PPSSPP_UWP.appx
 
     - name: Upload UWP build
       uses: actions/upload-artifact@v3
