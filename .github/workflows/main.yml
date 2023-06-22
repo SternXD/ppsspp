@@ -1,5 +1,3 @@
-name: Build
-
 on:
   push:
     branches:
@@ -37,7 +35,9 @@ jobs:
       uses: microsoft/setup-msbuild@v1.1
    
     - name: Install winget
-      run: winget install winget
+      run: |
+        Invoke-WebRequest -Uri https://github.com/microsoft/winget-cli/releases/download/v1.1.12653/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle -OutFile winget.msixbundle
+        Add-AppxPackage .\winget.msixbundle
     
     - name: Install makeappx.exe
       run: winget install makeappx
