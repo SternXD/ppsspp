@@ -24,18 +24,9 @@ on:
 
 env:
   BUILD_CONFIGURATION: Release
+  APPX_PACKAGE_FORMAT: AppX
 
 jobs:
-  build-windows:
-    strategy:
-      fail-fast: false
-
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@fail
-      with:
-        submodules: recursive
-
   build-uwp:
     runs-on: windows-2019
     steps:
@@ -51,12 +42,11 @@ jobs:
       run: |
         msbuild /m /p:TrackFileAccess=false /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=x64 /p:AppxPackageSigningEnabled=false UWP/PPSSPP_UWP.sln
         
-        # Package the app into an AppX or MSIX executable.
-        if ($ENV:APPX_PACKAGE_FORMAT == "AppX") {
-          makeappx.exe -p UWP/PPSSPP_UWP.appxmanifest -f Appx -r
-        } else {
-          makeappx.exe -p UWP/PPSSPP_UWP.appxmanifest -f MSIX -r
-        }
+        # Package the app into an AppX executable.
+        makeappx.exe -p UWP/PPSSPP_UWP.appxmanifest -f Appx -r
+
+        # Sign the AppX package.
+        signtool.exe sign /f ppsspp/UWP/PPSSPP_UWP_TemporaryKey.pfx UWP/PPSSPP_UWP.appx
 
     - name: Upload UWP build
       uses: actions/upload-artifact@v3
