@@ -23,7 +23,6 @@ on:
     - 'appveyor.yml'
 
 env:
-  BUILD_CONFIGURATION: Release
   APPX_PACKAGE_FORMAT: AppX
 
 jobs:
@@ -37,10 +36,16 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.1
 
+    - name: Install makeappx.exe
+      run: winget install makeappx
+
+    - name: Install signtool.exe
+      run: winget install signtool
+
     - name: Build UWP
       working-directory: ${{ env.GITHUB_WORKSPACE }}
       run: |
-        msbuild /m /p:TrackFileAccess=false /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=x64 /p:AppxPackageSigningEnabled=false UWP/PPSSPP_UWP.sln
+        msbuild /m /p:Configuration=Release UWP/PPSSPP_UWP.sln
         
         # Package the app into an AppX executable.
         makeappx.exe -p UWP/PPSSPP_UWP.appxmanifest -f Appx -r
