@@ -35,7 +35,7 @@ jobs:
       uses: microsoft/setup-msbuild@v1.1
     
     - name: Load Appx module
-      run: Import-Module Appx
+      run: Import-Module -Name Appx -UseWindowsPowerShell
     
     - name: Install winget
       run: |
