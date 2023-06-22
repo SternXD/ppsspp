@@ -33,7 +33,10 @@ jobs:
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.1
-   
+    
+    - name: Load Appx module
+      run: Import-Module Appx
+    
     - name: Install winget
       run: |
         Invoke-WebRequest -Uri https://github.com/microsoft/winget-cli/releases/download/v1.1.12653/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle -OutFile winget.msixbundle
