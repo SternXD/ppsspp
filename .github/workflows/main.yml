@@ -29,12 +29,10 @@ jobs:
   build-windows:
     strategy:
       fail-fast: false
-      matrix:
-        platform: [x64, ARM64]
 
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@fail
       with:
         submodules: recursive
 
